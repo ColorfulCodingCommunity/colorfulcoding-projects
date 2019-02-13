@@ -1,0 +1,11 @@
+*.iml
+.gradle
+1-ARCore Scanner/local.properties
+1-ARCore Scanner/.idea/caches/build_file_checksums.ser
+1-ARCore Scanner/.idea/libraries
+1-ARCore Scanner/.idea/modules.xml
+1-ARCore Scanner/.idea/workspace.xml
+.DS_Store
+1-ARCore Scanner/build
+1-ARCore Scanner/captures
+.externalNativeBuild
