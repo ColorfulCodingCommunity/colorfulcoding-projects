@@ -26,12 +26,32 @@
             android:textColor="#fff"
             android:text="0"
             />
-        <Button
-            android:id="@+id/test_but"
+        <RelativeLayout
             android:layout_width="fill_parent"
             android:layout_height="wrap_content"
             android:layout_alignParentBottom="true"
-            android:text="Test something!"
-            />
+            android:orientation="horizontal"
+            android:baselineAligned="false">
+            <View android:id="@+id/fakeView"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_centerInParent="true"/>
+            <Button
+                android:id="@+id/test_but"
+                android:text="Scan"
+                android:layout_height="wrap_content"
+                android:layout_width="wrap_content"
+                android:layout_alignRight="@id/fakeView"
+                android:layout_alignParentLeft="true"
+                />
+            <Button
+                android:id="@+id/save_but"
+                android:text="Save"
+                android:layout_height="wrap_content"
+                android:layout_width="wrap_content"
+                android:layout_alignLeft="@id/fakeView"
+                android:layout_alignParentRight="true"
+                />
+        </RelativeLayout>
     </RelativeLayout>
 </android.support.constraint.ConstraintLayout>
