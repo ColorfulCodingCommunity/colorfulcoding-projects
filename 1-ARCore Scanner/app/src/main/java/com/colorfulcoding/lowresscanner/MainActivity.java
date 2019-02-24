@@ -41,10 +41,12 @@ import java.util.Optional;
 public class MainActivity extends AppCompatActivity {
 
     private final String TAG="LOW_RES_SCANNER";
+    //Distance threshold that defines the min distance a point in the pointCloud should be to not be considered the same point.
     private final float MIN_DIST_THRESHOLD = 0.01f; // 1cm
     private ArFragment fragment;
     private TextView debugText;
 
+    //Class that manages the process for finding out the position of a 3D point in the 2D screen
     private WorldToScreenTranslator worldToScreenTranslator;
 
     private List<Float[]> positions3D;
@@ -67,6 +69,7 @@ public class MainActivity extends AppCompatActivity {
         colorsRGB = new ArrayList<>();
     }
 
+    //Scanning method
     private boolean scanning = false;
     private void testingMethod(View v){
         if(scanning){
@@ -84,11 +87,11 @@ public class MainActivity extends AppCompatActivity {
 
 
         scanning = true;
-        //X Y Z confidence
-        //84-604
+
         PointCloudNode pcNode = new PointCloudNode(getApplicationContext());
         fragment.getArSceneView().getScene().addChild(pcNode);
 
+        //Called on each iteration
         fragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
             if(!scanning) return;
 
@@ -103,6 +106,8 @@ public class MainActivity extends AppCompatActivity {
                     float[] w = new float[]{points.get(i), points.get(i + 1), points.get(i + 2)};
 
                     //Test if the feature point is not stored already.
+                    //Find the minimum distance point in positions3D and getting the Euclidean Distance
+                    //If there is one we jump a loop sequence, as this point is already stored
                     Optional<Float> minDist = positions3D.stream()
                             .map(vec -> this.squaredDistance(vec, w))
                             .min((d1, d2) -> d1 - d2 < 0? -1:1);
@@ -114,6 +119,7 @@ public class MainActivity extends AppCompatActivity {
                     if(color == null || color.length != 3)
                         continue;
 
+                    //This two arrays store all the data we need
                     positions3D.add(new Float[]{points.get(i), points.get(i + 1), points.get(i + 2)});
                     colorsRGB.add(new Integer[]{color[0], color[1], color[2]});
 
@@ -130,6 +136,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    //Euclidean distance
+    //We squared, as the SQRT is not as efficient as squaring the MIN_DIST_THRESHOLD
+    //The comparation result is not affected as distance is always positive (sum of squares)
     private float squaredDistance(Float[] v, float[] w){
         float sumSquare = 0;
         if(v.length != w.length) return -1;
@@ -141,21 +150,27 @@ public class MainActivity extends AppCompatActivity {
 
 
     int[] getScreenPixel(float[] worldPos) throws NotYetAvailableException {
-//        int[] dims = fragment.getArSceneView().getArFrame().getCamera().getImageIntrinsics().getImageDimensions();
         Image img = fragment.getArSceneView().getArFrame().acquireCameraImage();
 
+        //Not used as img has its own width/height but it's interesting to know we actually have access to these Display informations
+        //Android specific class
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
+        //ViewMatrix * ProjectionMatrix * Anchor Matrix
+        //Clip to Screen Space
         double[] pos2D = worldToScreenTranslator.worldToScreen(img.getWidth(), img.getHeight(), fragment.getArSceneView().getArFrame().getCamera(), worldPos);
 
+        //Workaround for YUV to RGB
+        //Android specific problem
         Bitmap bmp = imageToBitmap(img);
 
         //Otherwise the CPU will overload and crash
         img.close();
 
+        //Check if inside the screen
         if(pos2D[0] < 0 || pos2D[0] > bmp.getWidth() || pos2D[1] < 0 || pos2D[1] > bmp.getHeight()){
             return null;
         }
@@ -200,6 +215,7 @@ public class MainActivity extends AppCompatActivity {
         return Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
     }
 
+    //JSON operations. Depends on what you want to do with the data
     private void createJsonFromFeaturePoints(View v){
         try {
             JSONArray keypointJson = new JSONArray();
@@ -222,6 +238,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    //The JSON file is saved inside local data in com.colorfulcoding.lowresscan folder
+    //Files can be accesed inside Android Studio
+    //In a more perfect system the JSON would be send to some server or used directly.
     private void saveJsonToFile(String filename, String json){
         File file = new File(this.getApplicationContext().getFilesDir(), "scanapp");
         if(!file.exists()){
