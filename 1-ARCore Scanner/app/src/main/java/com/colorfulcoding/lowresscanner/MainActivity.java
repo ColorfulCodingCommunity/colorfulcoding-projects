@@ -71,7 +71,7 @@ public class MainActivity extends AppCompatActivity {
 
     //Scanning method
     private boolean scanning = false;
-    private void testingMethod(View v){
+    private void testingMethod(View v) {
         if(scanning){
             scanning = false;
             return;
@@ -101,6 +101,9 @@ public class MainActivity extends AppCompatActivity {
             try {
                 FloatBuffer points = pc.getPoints();
                 Log.i(TAG, "" + points.limit());
+                Image img = fragment.getArSceneView().getArFrame().acquireCameraImage();
+                Bitmap bmp = imageToBitmap(img);
+                img.close();
 
                 for(int i=0; i< points.limit(); i+=4) {
                     float[] w = new float[]{points.get(i), points.get(i + 1), points.get(i + 2)};
@@ -115,7 +118,7 @@ public class MainActivity extends AppCompatActivity {
                         continue;
                     }
 
-                    int[] color = getScreenPixel(w);
+                    int[] color = getScreenPixel(w, bmp);
                     if(color == null || color.length != 3)
                         continue;
 
@@ -124,9 +127,8 @@ public class MainActivity extends AppCompatActivity {
                     colorsRGB.add(new Integer[]{color[0], color[1], color[2]});
 
                     debugText.setText("" + positions3D.size() + " points scanned.");
-
-                    return;
                 }
+
                 //ResourceExhaustedException - Acquire failed because there are too many objects already acquired.
                 // For example, the developer may acquire up to N point clouds.
                 pc.release();
@@ -149,26 +151,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    int[] getScreenPixel(float[] worldPos) throws NotYetAvailableException {
-        Image img = fragment.getArSceneView().getArFrame().acquireCameraImage();
-
-        //Not used as img has its own width/height but it's interesting to know we actually have access to these Display informations
-        //Android specific class
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-        int height = displayMetrics.heightPixels;
-        int width = displayMetrics.widthPixels;
+    int[] getScreenPixel(float[] worldPos, Bitmap bmp) throws NotYetAvailableException {
 
         //ViewMatrix * ProjectionMatrix * Anchor Matrix
         //Clip to Screen Space
-        double[] pos2D = worldToScreenTranslator.worldToScreen(img.getWidth(), img.getHeight(), fragment.getArSceneView().getArFrame().getCamera(), worldPos);
-
-        //Workaround for YUV to RGB
-        //Android specific problem
-        Bitmap bmp = imageToBitmap(img);
-
-        //Otherwise the CPU will overload and crash
-        img.close();
+        double[] pos2D = worldToScreenTranslator.worldToScreen(bmp.getWidth(), bmp.getHeight(), fragment.getArSceneView().getArFrame().getCamera(), worldPos);
 
         //Check if inside the screen
         if(pos2D[0] < 0 || pos2D[0] > bmp.getWidth() || pos2D[1] < 0 || pos2D[1] > bmp.getHeight()){
