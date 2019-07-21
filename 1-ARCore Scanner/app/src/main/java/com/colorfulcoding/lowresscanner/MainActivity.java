@@ -18,6 +18,7 @@ import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.google.ar.core.Frame;
 import com.google.ar.core.PointCloud;
 import com.google.ar.core.exceptions.NotYetAvailableException;
 import com.google.ar.sceneform.Scene;
@@ -71,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
 
     //Scanning method
     private boolean scanning = false;
-    private void testingMethod(View v){
+    private void testingMethod(View v) {
         if(scanning){
             scanning = false;
             return;
@@ -95,41 +96,43 @@ public class MainActivity extends AppCompatActivity {
         fragment.getArSceneView().getScene().addOnUpdateListener(frameTime -> {
             if(!scanning) return;
 
-            PointCloud pc = fragment.getArSceneView().getArFrame().acquirePointCloud();
+            Frame frame = fragment.getArSceneView().getArFrame();
+            PointCloud pc = frame.acquirePointCloud();
+
+
             pcNode.update(pc);
 
             try {
                 FloatBuffer points = pc.getPoints();
                 Log.i(TAG, "" + points.limit());
 
+                Image img = frame.acquireCameraImage();
+                Bitmap bmp = imageToBitmap(img);
+                img.close();
+
                 for(int i=0; i< points.limit(); i+=4) {
+
+                    if(points.get(i+3)<0.5) continue;
+
+
                     float[] w = new float[]{points.get(i), points.get(i + 1), points.get(i + 2)};
 
-                    //Test if the feature point is not stored already.
-                    //Find the minimum distance point in positions3D and getting the Euclidean Distance
-                    //If there is one we jump a loop sequence, as this point is already stored
-                    Optional<Float> minDist = positions3D.stream()
-                            .map(vec -> this.squaredDistance(vec, w))
-                            .min((d1, d2) -> d1 - d2 < 0? -1:1);
-                    if (minDist.orElse(1000f) < MIN_DIST_THRESHOLD * MIN_DIST_THRESHOLD){
-                        continue;
-                    }
+                    int[] color = getScreenPixel(w, bmp);
 
-                    int[] color = getScreenPixel(w);
-                    if(color == null || color.length != 3)
-                        continue;
+                    if(color == null || color.length != 3) continue;
 
                     //This two arrays store all the data we need
                     positions3D.add(new Float[]{points.get(i), points.get(i + 1), points.get(i + 2)});
                     colorsRGB.add(new Integer[]{color[0], color[1], color[2]});
-
-                    debugText.setText("" + positions3D.size() + " points scanned.");
-
-                    return;
                 }
+
+
+                debugText.setText("" + positions3D.size() + " points scanned.");
+
                 //ResourceExhaustedException - Acquire failed because there are too many objects already acquired.
                 // For example, the developer may acquire up to N point clouds.
                 pc.release();
+
             } catch (NotYetAvailableException e) {
                 Log.e(TAG, e.getMessage());
             }
@@ -149,26 +152,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
 
-    int[] getScreenPixel(float[] worldPos) throws NotYetAvailableException {
-        Image img = fragment.getArSceneView().getArFrame().acquireCameraImage();
-
-        //Not used as img has its own width/height but it's interesting to know we actually have access to these Display informations
-        //Android specific class
-        DisplayMetrics displayMetrics = new DisplayMetrics();
-        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
-        int height = displayMetrics.heightPixels;
-        int width = displayMetrics.widthPixels;
+    int[] getScreenPixel(float[] worldPos, Bitmap bmp) throws NotYetAvailableException {
 
         //ViewMatrix * ProjectionMatrix * Anchor Matrix
         //Clip to Screen Space
-        double[] pos2D = worldToScreenTranslator.worldToScreen(img.getWidth(), img.getHeight(), fragment.getArSceneView().getArFrame().getCamera(), worldPos);
-
-        //Workaround for YUV to RGB
-        //Android specific problem
-        Bitmap bmp = imageToBitmap(img);
-
-        //Otherwise the CPU will overload and crash
-        img.close();
+        double[] pos2D = worldToScreenTranslator.worldToScreen(bmp.getWidth(), bmp.getHeight(), fragment.getArSceneView().getArFrame().getCamera(), worldPos);
 
         //Check if inside the screen
         if(pos2D[0] < 0 || pos2D[0] > bmp.getWidth() || pos2D[1] < 0 || pos2D[1] > bmp.getHeight()){
@@ -217,6 +205,8 @@ public class MainActivity extends AppCompatActivity {
 
     //JSON operations. Depends on what you want to do with the data
     private void createJsonFromFeaturePoints(View v){
+        Log.i(TAG, "Creating json");
+
         try {
             JSONArray keypointJson = new JSONArray();
             for(int i=0;i<positions3D.size();i++){
@@ -227,12 +217,15 @@ public class MainActivity extends AppCompatActivity {
                 point.put("color", color);
                 keypointJson.put(point);
             }
+            Log.i(TAG, "json created");
 
             JSONObject jsonParent = new JSONObject();
             jsonParent.put("keypoints", keypointJson);
 
             saveJsonToFile("pointcloud.json", jsonParent.toString());
+            Log.i(TAG, "Saved json");
             Toast.makeText(this, "Keypoints JSON saved to file!", Toast.LENGTH_SHORT);
+            Log.i(TAG, "toastered?");
         } catch (JSONException e) {
             Log.e(TAG, e.getMessage());
         }
@@ -242,17 +235,20 @@ public class MainActivity extends AppCompatActivity {
     //Files can be accesed inside Android Studio
     //In a more perfect system the JSON would be send to some server or used directly.
     private void saveJsonToFile(String filename, String json){
-        File file = new File(this.getApplicationContext().getFilesDir(), "scanapp");
+        Log.i(TAG, this.getApplicationContext().getFilesDir().getAbsolutePath());
+        File file = new File(getExternalFilesDir(null), "scanapp");
         if(!file.exists()){
             file.mkdir();
         }
 
         try {
+
             File jsonFile = new File(file, filename);
             FileWriter writer = new FileWriter(jsonFile);
             writer.append(json);
             writer.flush();
             writer.close();
+            Log.i(TAG, "Wroteskiroo");
 
             Toast.makeText(this,"JSON written to disk" + jsonFile.getAbsolutePath(), Toast.LENGTH_LONG);
         } catch (IOException e) {
